@@ -6,7 +6,10 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 const corsOptions = {
-  origin: 'https://preview--smart-cart-compare-ai.lovable.app',
+  origin: [
+    'https://smart-cart-compare-ai.lovable.app',
+    'https://preview--smart-cart-compare-ai.lovable.app'
+  ],
   methods: ['GET', 'POST', 'OPTIONS'],
   allowedHeaders: ['Content-Type'],
 };
