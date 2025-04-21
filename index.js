@@ -31,7 +31,10 @@ app.post('/scrape', async (req, res) => {
     return res.status(400).json({ error: 'Missing or invalid shoppingList array' });
   }
 
-  const browser = await chromium.launch({ headless: true });
+  const browser = await chromium.launch({
+    headless: true,
+    args: ['--no-sandbox', '--disable-setuid-sandbox']
+  });  
   const page = await browser.newPage();
 
   const results = {
