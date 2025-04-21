@@ -1,15 +1,20 @@
 const express = require('express');
-app.use(cors({
-  origin: 'https://preview--smart-cart-compare-ai.lovable.app',
-  methods: ['GET', 'POST'],
-  allowedHeaders: ['Content-Type']
-}));
+const cors = require('cors');
 const { chromium } = require('playwright');
 
 const app = express();
-app.use(cors());
 app.use(express.json());
 
+// ✅ Explicit CORS config for Lovable
+const corsOptions = {
+  origin: 'https://smart-cart-compare-ai.lovable.app',
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type'],
+};
+app.use(cors(corsOptions));
+app.options('/scrape', cors(corsOptions)); // ✅ Handle CORS preflight for /scrape
+
+// ✅ Scraping endpoint
 app.post('/scrape', async (req, res) => {
   const searchTerm = req.body.searchTerm;
   if (!searchTerm) return res.status(400).json({ error: 'Missing search term' });
@@ -23,7 +28,7 @@ app.post('/scrape', async (req, res) => {
   };
 
   try {
-    // TESCO SCRAPER
+    // 🔍 Tesco
     await page.goto(`https://www.tesco.com/groceries/en-GB/search?query=${searchTerm}`, { waitUntil: 'domcontentloaded' });
     await page.waitForSelector('.product-list--list-item', { timeout: 10000 });
     results.tesco = await page.$$eval('.product-list--list-item', items =>
@@ -36,7 +41,7 @@ app.post('/scrape', async (req, res) => {
       })
     );
 
-    // SAINSBURY'S SCRAPER
+    // 🔍 Sainsbury's
     await page.goto(`https://www.sainsburys.co.uk/gol-ui/SearchResults/${searchTerm}`, { waitUntil: 'domcontentloaded' });
     await page.waitForSelector('[data-test-id="product-list"]', { timeout: 10000 });
     results.sainsburys = await page.$$eval('[data-test-id="product"], [data-test-id="product-tile"]', items =>
@@ -58,5 +63,7 @@ app.post('/scrape', async (req, res) => {
   res.json(results);
 });
 
+// ✅ Launch server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`🛒 Scraper API running on http://localhost:${PORT}`));
+
