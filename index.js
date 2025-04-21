@@ -5,77 +5,114 @@ const { chromium } = require('playwright');
 const app = express();
 app.use(express.json());
 
-// ✅ Explicit CORS config for Lovable and Railway
+// ✅ CORS config for Lovable production & preview
 const corsOptions = {
-  origin: 'https://smart-cart-compare-ai.lovable.app',
+  origin: [
+    'https://smart-cart-compare-ai.lovable.app',
+    'https://preview--smart-cart-compare-ai.lovable.app'
+  ],
   methods: ['GET', 'POST', 'OPTIONS'],
   allowedHeaders: ['Content-Type']
 };
+
 app.use(cors(corsOptions));
-app.options('/scrape', cors(corsOptions));
+app.options('*', cors(corsOptions));
 
-// ✅ Scraping endpoint with validation and logs
+// ✅ Scraping handler
 app.post('/scrape', async (req, res) => {
-  const { searchTerm } = req.body;
+  const shoppingList = req.body.shoppingList;
 
-  console.log('🔍 Received POST /scrape request:', req.body);
-
-  if (!searchTerm || typeof searchTerm !== 'string' || !searchTerm.trim()) {
-    console.error('❌ Invalid searchTerm:', searchTerm);
-    return res.status(400).json({ error: 'Missing or invalid search term' });
+  if (!Array.isArray(shoppingList) || shoppingList.length === 0) {
+    console.log('❌ Invalid shopping list:', shoppingList);
+    return res.status(400).json({ error: 'Missing or invalid shopping list' });
   }
 
-  const results = {
-    tesco: [],
-    sainsburys: []
-  };
+  const browser = await chromium.launch({ headless: true });
+  const page = await browser.newPage();
+  const results = [];
 
-  let browser;
   try {
-    browser = await chromium.launch({ headless: true });
-    const page = await browser.newPage();
+    for (const item of shoppingList) {
+      const searchTerm = item.name?.trim();
+      const preference = item.preference || 'cheapest';
 
-    // Tesco
-    console.log(`🛒 Scraping Tesco for "${searchTerm}"`);
-    await page.goto(`https://www.tesco.com/groceries/en-GB/search?query=${encodeURIComponent(searchTerm)}`, { waitUntil: 'domcontentloaded' });
-    await page.waitForSelector('.product-list--list-item', { timeout: 10000 });
-    results.tesco = await page.$$eval('.product-list--list-item', items =>
-      items.slice(0, 3).map(item => {
-        const title = item.querySelector('h3 a')?.innerText || '';
-        const price = item.querySelector('.value')?.innerText || '';
-        const unitPrice = item.querySelector('.price-per-quantity-weight')?.innerText || '';
-        const link = 'https://www.tesco.com' + (item.querySelector('h3 a')?.getAttribute('href') || '');
-        return { store: 'Tesco', title, price, unitPrice, link };
-      })
-    );
+      if (!searchTerm) continue;
+      console.log(`🔍 Searching for: ${searchTerm}`);
 
-    // Sainsbury's
-    console.log(`🛒 Scraping Sainsbury's for "${searchTerm}"`);
-    await page.goto(`https://www.sainsburys.co.uk/gol-ui/SearchResults/${encodeURIComponent(searchTerm)}`, { waitUntil: 'domcontentloaded' });
-    await page.waitForSelector('[data-test-id="product-list"]', { timeout: 10000 });
-    results.sainsburys = await page.$$eval('[data-test-id="product"], [data-test-id="product-tile"]', items =>
-      items.slice(0, 3).map(item => {
-        const title = item.querySelector('h2, h3')?.innerText || '';
-        const price = item.querySelector('[data-test-id="price"]')?.innerText || '';
-        const unitPrice = item.querySelector('[data-test-id="unit-price"]')?.innerText || '';
-        const link = item.querySelector('a')?.href || '';
-        return { store: "Sainsbury's", title, price, unitPrice, link };
-      })
-    );
+      // Tesco scrape
+      await page.goto(`https://www.tesco.com/groceries/en-GB/search?query=${searchTerm}`, { waitUntil: 'domcontentloaded' });
+      await page.waitForSelector('.product-list--list-item', { timeout: 10000 });
+      const tescoItems = await page.$$eval('.product-list--list-item', items =>
+        items.slice(0, 3).map((item, i) => {
+          const title = item.querySelector('h3 a')?.innerText || '';
+          const price = item.querySelector('.value')?.innerText || '';
+          const unitPrice = item.querySelector('.price-per-quantity-weight')?.innerText || '';
+          const link = 'https://www.tesco.com' + (item.querySelector('h3 a')?.getAttribute('href') || '');
+          return {
+            id: `Tesco-${i}`,
+            store: 'Tesco',
+            title, price, unitPrice, link,
+            qualityScore: Math.floor(Math.random() * 5) + 1
+          };
+        })
+      );
 
-    console.log('✅ Scraping complete:', results);
+      // Sainsbury's scrape
+      await page.goto(`https://www.sainsburys.co.uk/gol-ui/SearchResults/${searchTerm}`, { waitUntil: 'domcontentloaded' });
+      await page.waitForSelector('[data-test-id="product-list"]', { timeout: 10000 });
+      const sainsburyItems = await page.$$eval('[data-test-id="product"], [data-test-id="product-tile"]', items =>
+        items.slice(0, 3).map((item, i) => {
+          const title = item.querySelector('h2, h3')?.innerText || '';
+          const price = item.querySelector('[data-test-id="price"]')?.innerText || '';
+          const unitPrice = item.querySelector('[data-test-id="unit-price"]')?.innerText || '';
+          const link = item.querySelector('a')?.href || '';
+          return {
+            id: `Sainsbury-${i}`,
+            store: "Sainsbury's",
+            title, price, unitPrice, link,
+            qualityScore: Math.floor(Math.random() * 5) + 1
+          };
+        })
+      );
 
-    res.json(results);
-  } catch (error) {
-    console.error('🔥 Scraping error:', error);
-    res.status(500).json({ error: 'Internal scraping error', message: error.message });
-  } finally {
-    if (browser) await browser.close();
+      // Combine results
+      let options = [...tescoItems, ...sainsburyItems];
+
+      if (preference === 'cheapest') {
+        options.sort((a, b) => parseFloat(a.price.replace(/[^\d.]/g, '')) - parseFloat(b.price.replace(/[^\d.]/g, '')));
+      } else if (preference === 'highest-quality') {
+        options.sort((a, b) => b.qualityScore - a.qualityScore);
+      } else if (preference === 'best-value') {
+        options.sort((a, b) => {
+          const aVal = parseFloat(a.price.replace(/[^\d.]/g, '')) / a.qualityScore;
+          const bVal = parseFloat(b.price.replace(/[^\d.]/g, '')) / b.qualityScore;
+          return aVal - bVal;
+        });
+      }
+
+      if (options.length > 0) options[0].isPreferred = true;
+
+      results.push({
+        productName: searchTerm,
+        preference,
+        options
+      });
+    }
+
+    await browser.close();
+    console.log(`✅ Done processing ${results.length} results`);
+    res.json({ results });
+
+  } catch (err) {
+    console.error('❌ Scraper Error:', err);
+    await browser.close();
+    res.status(500).json({ error: 'Scraper failed', details: err.message });
   }
 });
 
-// Start the server
+// ✅ Launch server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`✅ Scraper API running on http://localhost:${PORT}`);
+  console.log(`🛒 Scraper API running on http://localhost:${PORT}`);
 });
+
