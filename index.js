@@ -1,5 +1,9 @@
 const express = require('express');
-const cors = require('cors');
+app.use(cors({
+  origin: 'https://preview--smart-cart-compare-ai.lovable.app',
+  methods: ['GET', 'POST'],
+  allowedHeaders: ['Content-Type']
+}));
 const { chromium } = require('playwright');
 
 const app = express();
