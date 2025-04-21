@@ -12,8 +12,9 @@ const corsOptions = {
   allowedHeaders: ['Content-Type'],
 };
 app.use(cors(corsOptions));
-app.options('/scrape', cors(corsOptions)); // ✅ Handle CORS preflight for /scrape
-
+app.options('/scrape', cors(corsOptions), (req, res) => {
+  res.sendStatus(200); // ✅ Respond to preflight requests
+});
 // ✅ Scraping endpoint
 app.post('/scrape', async (req, res) => {
   const searchTerm = req.body.searchTerm;
