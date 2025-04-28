@@ -46,10 +46,10 @@ app.post('/scrape', async (req, res) => {
     try {
       await page.goto(`https://www.tesco.com/groceries/en-GB/search?query=${searchTerm}`, {
         waitUntil: 'networkidle2',
-        timeout: 20000
+        timeout: 30000
       });
 
-      await page.waitForSelector('.product-list--list-item', { timeout: 10000 });
+      await page.waitForSelector('.product-list--list-item', { timeout: 30000 });
 
       results.tesco = await page.$$eval('.product-list--list-item', items =>
         items.slice(0, 3).map(item => {
@@ -68,10 +68,10 @@ app.post('/scrape', async (req, res) => {
     try {
       await page.goto(`https://www.sainsburys.co.uk/gol-ui/SearchResults/${searchTerm}`, {
         waitUntil: 'networkidle2',
-        timeout: 20000
+        timeout: 30000
       });
 
-      await page.waitForSelector('[data-test-id="product-list"]', { timeout: 10000 });
+      await page.waitForSelector('[data-test-id="product-list"]', { timeout: 30000 });
 
       results.sainsburys = await page.$$eval('[data-test-id="product"], [data-test-id="product-tile"]', items =>
         items.slice(0, 3).map(item => {
